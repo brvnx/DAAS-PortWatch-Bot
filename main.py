@@ -181,43 +181,78 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/status - Mostra a última checagem, total de navios e navios previstos\n"
         "/verificar - Verifica manualmente por novas manobras\n"
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=msg, 
+        parse_mode="Markdown"
+    )
 
 async def detalhes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retorna detalhes de um navio específico"""
     if not context.args:
-        await update.message.reply_text("❗ Use assim: /detalhes NomeDoNavio")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="❗ Use assim: /detalhes NomeDoNavio"
+        )
         return
 
     nome = " ".join(context.args).lower()
     if nome in detalhes_navios:
         msg = formatar_detalhes(detalhes_navios[nome])
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=msg, 
+            parse_mode="Markdown"
+        )
     else:
-        await update.message.reply_text("⚠️ Nenhum navio encontrado com esse nome.")
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text="⚠️ Nenhum navio encontrado com esse nome."
+        )
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra status do bot, última atualização e navios previstos"""
-    if ultima_lista:
-        ultima_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-        total_navios = len(detalhes_navios)
-        navios = "\n".join(f"🛳️ {m['nome']} | {m['tipo']} | Berço: {m['berco']}" 
-                           for m in ultima_lista[:10])
+    try:
+        if ultima_lista:
+            ultima_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+            total_navios = len(detalhes_navios)
+            
+            # Limita a 5 navios para não exceder o limite do Telegram
+            navios_lista = ultima_lista[:5]
+            navios = "\n".join(f"🛳️ {m['nome']} | {m['tipo']} | Berço: {m['berco']}" 
+                               for m in navios_lista)
+            
+            msg = (
+                f"🤖 *DAAS PortWatch Status*\n\n"
+                f"📅 Última checagem: {ultima_atualizacao}\n"
+                f"🔢 Total de navios monitorados: {total_navios}\n\n"
+                f"*Últimos navios previstos:*\n{navios}"
+            )
+        else:
+            msg = "🤖 O bot ainda não realizou a primeira checagem do site."
         
-        msg = (
-            f"🤖 *DAAS PortWatch Status*\n\n"
-            f"📅 Última checagem: {ultima_atualizacao}\n"
-            f"🔢 Total de navios monitorados: {total_navios}\n\n"
-            f"*Últimos navios previstos:*\n{navios}"
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=msg, 
+            parse_mode="Markdown"
         )
-    else:
-        msg = "🤖 O bot ainda não realizou a primeira checagem do site."
-    
-    await update.message.reply_text(msg, parse_mode="Markdown")
+        
+    except Exception as e:
+        print(f"❌ Erro no comando status: {e}")
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text="❌ Erro ao obter status. Tente novamente."
+            )
+        except:
+            pass
 
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde se o bot está ativo"""
-    await update.message.reply_text("Pong! Bot ativo ✅")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="Pong! Bot ativo ✅"
+    )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Comando de início"""
@@ -226,17 +261,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Este bot monitora manobras de navios automaticamente.\n\n"
         "Use /help para ver todos os comandos disponíveis."
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=msg, 
+        parse_mode="Markdown"
+    )
 
 async def verificar_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Verificação manual"""
-    await update.message.reply_text("🔍 Verificando novas manobras...")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="🔍 Verificando novas manobras..."
+    )
     await verificar_novidades(context)
-    await update.message.reply_text("✅ Verificação manual concluída!")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text="✅ Verificação manual concluída!"
+    )
 
-# === MAIN SIMPLIFICADA ===
+# === MAIN ===
 def main():
-    """Função principal simplificada para Railway"""
+    """Função principal"""
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
@@ -254,7 +299,7 @@ def main():
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
-        # Inicia o bot de forma bloqueante
+        # Inicia o bot
         application.run_polling()
         
     except Exception as e:
