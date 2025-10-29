@@ -227,14 +227,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# === MAIN ===
+# === MAIN CORRIGIDA ===
 async def main():
     """Função principal"""
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
-        # Cria a aplicação
-        application = ApplicationBuilder().token(TOKEN).build()
+        # Cria a aplicação COM JobQueue
+        application = (
+            ApplicationBuilder()
+            .token(TOKEN)
+            .concurrent_updates(True)
+            .build()
+        )
         
         # Adiciona handlers
         application.add_handler(CommandHandler("start", start))
