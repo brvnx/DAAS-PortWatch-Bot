@@ -227,19 +227,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# === MAIN CORRIGIDA ===
-async def main():
-    """Função principal"""
+# === MAIN SIMPLIFICADA PARA RAILWAY ===
+def main():
+    """Função principal simplificada para Railway"""
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
-        # Cria a aplicação COM JobQueue
-        application = (
-            ApplicationBuilder()
-            .token(TOKEN)
-            .concurrent_updates(True)
-            .build()
-        )
+        # Cria a aplicação
+        application = ApplicationBuilder().token(TOKEN).build()
         
         # Adiciona handlers
         application.add_handler(CommandHandler("start", start))
@@ -248,19 +243,22 @@ async def main():
         application.add_handler(CommandHandler("status", status))
         application.add_handler(CommandHandler("ping", ping))
         
-        # Agenda a verificação periódica
-        job_queue = application.job_queue
-        job_queue.run_repeating(verificar_novidades, interval=600, first=10)
+        # Agenda a verificação periódica (se JobQueue estiver disponível)
+        if application.job_queue:
+            application.job_queue.run_repeating(verificar_novidades, interval=600, first=10)
+            print("✅ JobQueue configurado para verificações a cada 10 minutos")
+        else:
+            print("⚠️ JobQueue não disponível - usando verificação manual")
         
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
-        # Inicia o bot
-        await application.run_polling()
+        # Inicia o bot de forma bloqueante
+        application.run_polling()
         
     except Exception as e:
         print(f"❌ Erro fatal na inicialização: {e}")
         raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
