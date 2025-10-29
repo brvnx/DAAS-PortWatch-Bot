@@ -1,14 +1,13 @@
-import asyncio
 import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder,
+    Updater,
     CommandHandler,
-    ContextTypes,   
+    CallbackContext,
     MessageHandler,
-    filters          
+    Filters
 )
 
 import os
@@ -122,7 +121,7 @@ def formatar_detalhes(m):
 
 
 # === MONITORAMENTO AUTOMÁTICO ===
-async def verificar_novidades(context):
+def verificar_novidades(context):
     """Verifica o site e envia novas manobras para o grupo"""
     global ultima_lista, detalhes_navios
     try:
@@ -151,15 +150,12 @@ async def verificar_novidades(context):
                 
                 # Envia alerta
                 msg = formatar_alerta(m)
-                await context.bot.send_message(
+                context.bot.send_message(
                     chat_id=int(CHAT_ID), 
                     text=msg, 
                     parse_mode="Markdown"
                 )
                 print(f"📤 Alert enviado para: {m['nome']}")
-                
-                # Pequeno delay entre mensagens
-                await asyncio.sleep(1)
             
             # Atualiza a lista de referência
             ultima_lista = atual
@@ -170,7 +166,7 @@ async def verificar_novidades(context):
         print(f"❌ Erro ao verificar site: {e}")
 
 # === COMANDOS DO BOT ===
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def help_command(update: Update, context: CallbackContext):
     """Lista todos os comandos disponíveis"""
     msg = (
         "🤖 *DAAS PortWatch Bot*\n\n"
@@ -179,29 +175,30 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/detalhes NomeDoNavio - Mostra os detalhes de um navio específico\n"
         "/ping - Debug\n"
         "/status - Mostra a última checagem, total de navios e navios previstos\n"
+        "/verificar - Verifica manualmente por novas manobras\n"
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg, parse_mode="Markdown")
 
-async def detalhes(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def detalhes(update: Update, context: CallbackContext):
     """Retorna detalhes de um navio específico"""
     if not context.args:
-        await update.message.reply_text("❗ Use assim: /detalhes NomeDoNavio")
+        update.message.reply_text("❗ Use assim: /detalhes NomeDoNavio")
         return
 
     nome = " ".join(context.args).lower()
     if nome in detalhes_navios:
         msg = formatar_detalhes(detalhes_navios[nome])
-        await update.message.reply_text(msg, parse_mode="Markdown")
+        update.message.reply_text(msg, parse_mode="Markdown")
     else:
-        await update.message.reply_text("⚠️ Nenhum navio encontrado com esse nome.")
+        update.message.reply_text("⚠️ Nenhum navio encontrado com esse nome.")
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def status(update: Update, context: CallbackContext):
     """Mostra status do bot, última atualização e navios previstos"""
     if ultima_lista:
         ultima_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         total_navios = len(detalhes_navios)
         navios = "\n".join(f"🛳️ {m['nome']} | {m['tipo']} | Berço: {m['berco']}" 
-                           for m in ultima_lista[:10])  # Limita a 10 para não ficar muito longo
+                           for m in ultima_lista[:10])
         
         msg = (
             f"🤖 *DAAS PortWatch Status*\n\n"
@@ -212,49 +209,58 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         msg = "🤖 O bot ainda não realizou a primeira checagem do site."
     
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg, parse_mode="Markdown")
 
-async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def ping(update: Update, context: CallbackContext):
     """Responde se o bot está ativo"""
-    await update.message.reply_text("Pong! Bot ativo ✅")
+    update.message.reply_text("Pong! Bot ativo ✅")
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def start(update: Update, context: CallbackContext):
     """Comando de início"""
     msg = (
         "🤖 *Bem-vindo ao DAAS PortWatch Bot!*\n\n"
         "Este bot monitora manobras de navios automaticamente.\n\n"
         "Use /help para ver todos os comandos disponíveis."
     )
-    await update.message.reply_text(msg, parse_mode="Markdown")
+    update.message.reply_text(msg, parse_mode="Markdown")
 
-# === MAIN SIMPLIFICADA PARA RAILWAY ===
+def verificar_manual(update: Update, context: CallbackContext):
+    """Verificação manual"""
+    update.message.reply_text("🔍 Verificando novas manobras...")
+    verificar_novidades(context)
+    update.message.reply_text("✅ Verificação manual concluída!")
+
+# === MAIN SIMPLIFICADA ===
 def main():
-    """Função principal simplificada para Railway"""
+    """Função principal"""
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
-        # Cria a aplicação
-        application = ApplicationBuilder().token(TOKEN).build()
+        # Cria o updater
+        updater = Updater(TOKEN, use_context=True)
+        dispatcher = updater.dispatcher
         
         # Adiciona handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("detalhes", detalhes))
-        application.add_handler(CommandHandler("status", status))
-        application.add_handler(CommandHandler("ping", ping))
+        dispatcher.add_handler(CommandHandler("start", start))
+        dispatcher.add_handler(CommandHandler("help", help_command))
+        dispatcher.add_handler(CommandHandler("detalhes", detalhes))
+        dispatcher.add_handler(CommandHandler("status", status))
+        dispatcher.add_handler(CommandHandler("ping", ping))
+        dispatcher.add_handler(CommandHandler("verificar", verificar_manual))
         
-        # Agenda a verificação periódica (se JobQueue estiver disponível)
-        if application.job_queue:
-            application.job_queue.run_repeating(verificar_novidades, interval=600, first=10)
-            print("✅ JobQueue configurado para verificações a cada 10 minutos")
-        else:
-            print("⚠️ JobQueue não disponível - usando verificação manual")
+        # Agenda a verificação periódica
+        job_queue = updater.job_queue
+        job_queue.run_repeating(verificar_novidades, interval=600, first=10)
         
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
-        # Inicia o bot de forma bloqueante
-        application.run_polling()
+        # Inicia o bot
+        updater.start_polling()
+        print("🤖 Bot está rodando...")
+        
+        # Mantém o bot rodando
+        updater.idle()
         
     except Exception as e:
         print(f"❌ Erro fatal na inicialização: {e}")
