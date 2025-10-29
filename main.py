@@ -284,11 +284,10 @@ def main():
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
-        # Cria a aplicação com polling parameters específicos
+        # Cria a aplicação
         application = (
             ApplicationBuilder()
             .token(TOKEN)
-            .concurrent_updates(True)
             .build()
         )
         
@@ -300,19 +299,31 @@ def main():
         application.add_handler(CommandHandler("ping", ping))
         application.add_handler(CommandHandler("verificar", verificar_manual))
         
+        # ✅ AGORA COM JOBQUEUE PARA VERIFICAÇÃO AUTOMÁTICA
+        job_queue = application.job_queue
+        
+        if job_queue:
+            # Agenda verificação a cada 10 minutos
+            job_queue.run_repeating(
+                verificar_novidades, 
+                interval=600,  # 10 minutos em segundos
+                first=10       # Primeira verificação em 10 segundos
+            )
+            print("✅ JobQueue configurado - Verificações automáticas a cada 10 min")
+        else:
+            print("⚠️ JobQueue não disponível - Apenas verificação manual")
+        
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
-        # Inicia o bot com polling parameters
+        # Inicia o bot
         application.run_polling(
-            allowed_updates=Update.ALL_TYPES,
-            drop_pending_updates=True,  # Importante: descarta updates pendentes
-            close_loop=False
+            drop_pending_updates=True
         )
         
     except Exception as e:
         print(f"❌ Erro fatal na inicialização: {e}")
         raise
-    
+
 if __name__ == "__main__":
     main()
