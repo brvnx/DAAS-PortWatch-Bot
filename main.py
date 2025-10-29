@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 # === CONFIGURAÇÕES ===
 load_dotenv()
-TOKEN = os.getenv("TELEGRAM_TOKEN")  # Alterado para padrão mais comum
+TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 URL = os.getenv("URL")
 
@@ -238,8 +238,8 @@ async def background_monitor(app):
             print(f"❌ Erro no monitoramento em background: {e}")
             await asyncio.sleep(60)  # Espera 1 minuto antes de tentar novamente
 
-# === MAIN ===
-async def main():
+# === MAIN CORRIGIDA PARA RAILWAY ===
+def main():
     """Função principal corrigida para Railway"""
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
@@ -255,22 +255,21 @@ async def main():
         app.add_handler(CommandHandler("ping", ping))
         
         # Inicia a tarefa de monitoramento em background
-        asyncio.create_task(background_monitor(app))
+        app.job_queue.run_repeating(
+            lambda context: asyncio.create_task(verificar_novidades(context.application)),
+            interval=600,  # 10 minutos
+            first=10       # Primeira execução em 10 segundos
+        )
         
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
         # Inicia o bot
-        await app.run_polling()
+        app.run_polling()
         
     except Exception as e:
         print(f"❌ Erro fatal na inicialização: {e}")
         raise
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("👋 Bot interrompido pelo usuário")
-    except Exception as e:
-        print(f"💥 Erro crítico: {e}")
+    main()
