@@ -1,6 +1,6 @@
 import asyncio
-import nest_asyncio  
-nest_asyncio.apply() 
+#import nest_asyncio  
+#nest_asyncio.apply() 
 import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -13,8 +13,9 @@ from telegram.ext import (
     filters          
 )
 
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
+
 
 # === CONFIGURAÇÕES ===
 load_dotenv()
@@ -111,7 +112,7 @@ async def verificar_novidades(app):
             for m in novos:
                 detalhes_navios[m["nome"].lower()] = m
                 msg = formatar_alerta(m)
-                await app.bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="Markdown")
+                await app.bot.send_message(chat_id=int(CHAT_ID), text=msg, parse_mode="Markdown")
             ultima_lista = atual
             print(f"{len(novos)} novas manobras enviadas.")
         else:
@@ -191,4 +192,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import nest_asyncio
+    nest_asyncio.apply()
+    import asyncio
+    # asyncio.run(main())
