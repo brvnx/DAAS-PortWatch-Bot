@@ -217,16 +217,15 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ultima_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             total_navios = len(detalhes_navios)
             
-            # Limita a 5 navios para não exceder o limite do Telegram
-            navios_lista = ultima_lista[:5]
+            # Mostra TODOS os navios sem limite
             navios = "\n".join(f"🛳️ {m['nome']} | {m['tipo']} | Berço: {m['berco']}" 
-                               for m in navios_lista)
+                               for m in ultima_lista)
             
             msg = (
                 f"🤖 *DAAS PortWatch Status*\n\n"
                 f"📅 Última checagem: {ultima_atualizacao}\n"
                 f"🔢 Total de navios monitorados: {total_navios}\n\n"
-                f"*Últimos navios previstos:*\n{navios}"
+                f"*Todos os navios previstos:*\n{navios}"
             )
         else:
             msg = "🤖 O bot ainda não realizou a primeira checagem do site."
