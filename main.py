@@ -122,7 +122,7 @@ def formatar_detalhes(m):
 
 
 # === MONITORAMENTO AUTOMÁTICO ===
-async def verificar_novidades(app):
+async def verificar_novidades(context):
     """Verifica o site e envia novas manobras para o grupo"""
     global ultima_lista, detalhes_navios
     try:
@@ -151,7 +151,7 @@ async def verificar_novidades(app):
                 
                 # Envia alerta
                 msg = formatar_alerta(m)
-                await app.bot.send_message(
+                await context.bot.send_message(
                     chat_id=int(CHAT_ID), 
                     text=msg, 
                     parse_mode="Markdown"
@@ -227,49 +227,35 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# === TAREFA EM SEGUNDO PLANO ===
-async def background_monitor(app):
-    """Tarefa de monitoramento em segundo plano"""
-    while True:
-        try:
-            await verificar_novidades(app)
-            await asyncio.sleep(600)  # 10 minutos
-        except Exception as e:
-            print(f"❌ Erro no monitoramento em background: {e}")
-            await asyncio.sleep(60)  # Espera 1 minuto antes de tentar novamente
-
-# === MAIN CORRIGIDA PARA RAILWAY ===
-def main():
-    """Função principal corrigida para Railway"""
+# === MAIN ===
+async def main():
+    """Função principal"""
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
         # Cria a aplicação
-        app = ApplicationBuilder().token(TOKEN).build()
+        application = ApplicationBuilder().token(TOKEN).build()
         
         # Adiciona handlers
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("help", help_command))
-        app.add_handler(CommandHandler("detalhes", detalhes))
-        app.add_handler(CommandHandler("status", status))
-        app.add_handler(CommandHandler("ping", ping))
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", help_command))
+        application.add_handler(CommandHandler("detalhes", detalhes))
+        application.add_handler(CommandHandler("status", status))
+        application.add_handler(CommandHandler("ping", ping))
         
-        # Inicia a tarefa de monitoramento em background
-        app.job_queue.run_repeating(
-            lambda context: asyncio.create_task(verificar_novidades(context.application)),
-            interval=600,  # 10 minutos
-            first=10       # Primeira execução em 10 segundos
-        )
+        # Agenda a verificação periódica
+        job_queue = application.job_queue
+        job_queue.run_repeating(verificar_novidades, interval=600, first=10)
         
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
         # Inicia o bot
-        app.run_polling()
+        await application.run_polling()
         
     except Exception as e:
         print(f"❌ Erro fatal na inicialização: {e}")
         raise
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
