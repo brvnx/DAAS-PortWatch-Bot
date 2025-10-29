@@ -1,6 +1,4 @@
 import asyncio
-#import nest_asyncio  
-#nest_asyncio.apply() 
 import requests
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -16,12 +14,24 @@ from telegram.ext import (
 import os
 from dotenv import load_dotenv
 
-
 # === CONFIGURAÇÕES ===
 load_dotenv()
-TOKEN = os.getenv("TOKEN")
+TOKEN = os.getenv("TELEGRAM_TOKEN")  # Alterado para padrão mais comum
 CHAT_ID = os.getenv("CHAT_ID")
 URL = os.getenv("URL")
+
+# Verifica se as variáveis de ambiente estão carregadas
+if not TOKEN:
+    raise ValueError("❌ TELEGRAM_TOKEN não encontrado nas variáveis de ambiente!")
+if not CHAT_ID:
+    raise ValueError("❌ CHAT_ID não encontrado nas variáveis de ambiente!")
+if not URL:
+    raise ValueError("❌ URL não encontrado nas variáveis de ambiente!")
+
+print("✅ Variáveis de ambiente carregadas:")
+print(f"   TOKEN: {TOKEN[:10]}...")
+print(f"   CHAT_ID: {CHAT_ID}")
+print(f"   URL: {URL}")
 
 ultima_lista = []
 detalhes_navios = {}
@@ -29,39 +39,55 @@ detalhes_navios = {}
 # === FUNÇÕES DE SCRAPING ===
 def obter_manobras():
     """Lê a tabela de manobras e retorna lista de dicionários"""
-    resposta = requests.get(URL)
-    resposta.encoding = "utf-8"
-    soup = BeautifulSoup(resposta.text, "html.parser")
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        resposta = requests.get(URL, headers=headers, timeout=30)
+        resposta.encoding = "utf-8"
+        resposta.raise_for_status()  # Levanta exceção para erros HTTP
+        
+        soup = BeautifulSoup(resposta.text, "html.parser")
 
-    tabela = soup.find("table")
-    if not tabela:
+        tabela = soup.find("table")
+        if not tabela:
+            print("❌ Nenhuma tabela encontrada no site")
+            return []
+
+        linhas = tabela.find_all("tr")[1:]  # Pula o cabeçalho
+        manobras = []
+        
+        for linha in linhas:
+            colunas = [td.text.strip() for td in linha.find_all("td")]
+            if len(colunas) >= 15:
+                manobra = {
+                    "nome": colunas[0],
+                    "bandeira": colunas[1],
+                    "indicativo": colunas[2],
+                    "calado": colunas[3],
+                    "dwt": colunas[4],
+                    "imo": colunas[5],
+                    "loa": colunas[6],
+                    "boca": colunas[7],
+                    "agencia": colunas[8],
+                    "rebocadores": colunas[9],
+                    "data": colunas[10],
+                    "hora": colunas[11],
+                    "tipo": colunas[12],
+                    "de": colunas[13],
+                    "berco": colunas[14],
+                }
+                manobras.append(manobra)
+        
+        print(f"✅ {len(manobras)} manobras obtidas do site")
+        return manobras
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Erro ao acessar o site: {e}")
         return []
-
-    linhas = tabela.find_all("tr")[1:]
-    manobras = []
-    for linha in linhas:
-        colunas = [td.text.strip() for td in linha.find_all("td")]
-        if len(colunas) >= 15:
-            manobra = {
-                "nome": colunas[0],
-                "bandeira": colunas[1],
-                "indicativo": colunas[2],
-                "calado": colunas[3],
-                "dwt": colunas[4],
-                "imo": colunas[5],
-                "loa": colunas[6],
-                "boca": colunas[7],
-                "agencia": colunas[8],
-                "rebocadores": colunas[9],
-                "data": colunas[10],
-                "hora": colunas[11],
-                "tipo": colunas[12],
-                "de": colunas[13],
-                "berco": colunas[14],
-            }
-            manobras.append(manobra)
-    return manobras
-
+    except Exception as e:
+        print(f"❌ Erro inesperado no scraping: {e}")
+        return []
 
 # === FORMATAÇÃO ===
 def formatar_alerta(m):
@@ -100,27 +126,50 @@ async def verificar_novidades(app):
     """Verifica o site e envia novas manobras para o grupo"""
     global ultima_lista, detalhes_navios
     try:
+        print("🔍 Verificando novidades no site...")
         atual = obter_manobras()
-        if not ultima_lista:
-            ultima_lista = atual
-            detalhes_navios = {m["nome"].lower(): m for m in atual}
-            print("Primeira checagem concluída.")
+        
+        if not atual:
+            print("⚠️ Nenhuma manobra obtida do site")
             return
 
-        novos = [m for m in atual if m not in ultima_lista]
-        if novos:
-            for m in novos:
-                detalhes_navios[m["nome"].lower()] = m
-                msg = formatar_alerta(m)
-                await app.bot.send_message(chat_id=int(CHAT_ID), text=msg, parse_mode="Markdown")
+        if not ultima_lista:
+            # Primeira execução
             ultima_lista = atual
-            print(f"{len(novos)} novas manobras enviadas.")
-        else:
-            print("Nenhuma novidade encontrada.")
-    except Exception as e:
-        print(f"Erro ao verificar site: {e}")
+            detalhes_navios = {m["nome"].lower(): m for m in atual}
+            print(f"✅ Primeira checagem concluída. {len(atual)} manobras encontradas.")
+            return
 
-# === COMANDO /help ===
+        # Encontrar novas manobras
+        novos = [m for m in atual if m not in ultima_lista]
+        
+        if novos:
+            print(f"🎯 {len(novos)} novas manobras detectadas!")
+            for m in novos:
+                # Adiciona aos detalhes
+                detalhes_navios[m["nome"].lower()] = m
+                
+                # Envia alerta
+                msg = formatar_alerta(m)
+                await app.bot.send_message(
+                    chat_id=int(CHAT_ID), 
+                    text=msg, 
+                    parse_mode="Markdown"
+                )
+                print(f"📤 Alert enviado para: {m['nome']}")
+                
+                # Pequeno delay entre mensagens
+                await asyncio.sleep(1)
+            
+            # Atualiza a lista de referência
+            ultima_lista = atual
+        else:
+            print("✅ Nenhuma novidade encontrada.")
+            
+    except Exception as e:
+        print(f"❌ Erro ao verificar site: {e}")
+
+# === COMANDOS DO BOT ===
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lista todos os comandos disponíveis"""
     msg = (
@@ -130,11 +179,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/detalhes NomeDoNavio - Mostra os detalhes de um navio específico\n"
         "/ping - Debug\n"
         "/status - Mostra a última checagem, total de navios e navios previstos\n"
-        
     )
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# === COMANDO /detalhes ===
 async def detalhes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Retorna detalhes de um navio específico"""
     if not context.args:
@@ -148,51 +195,82 @@ async def detalhes(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("⚠️ Nenhum navio encontrado com esse nome.")
 
-# === COMANDO /status ===
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Mostra status do bot, última atualização e navios previstos"""
     if ultima_lista:
         ultima_atualizacao = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         total_navios = len(detalhes_navios)
         navios = "\n".join(f"🛳️ {m['nome']} | {m['tipo']} | Berço: {m['berco']}" 
-                           for m in ultima_lista)
+                           for m in ultima_lista[:10])  # Limita a 10 para não ficar muito longo
+        
         msg = (
             f"🤖 *DAAS PortWatch Status*\n\n"
             f"📅 Última checagem: {ultima_atualizacao}\n"
             f"🔢 Total de navios monitorados: {total_navios}\n\n"
-            f"*Navios previstos:*\n{navios}"
+            f"*Últimos navios previstos:*\n{navios}"
         )
     else:
         msg = "🤖 O bot ainda não realizou a primeira checagem do site."
     
     await update.message.reply_text(msg, parse_mode="Markdown")
 
-# === COMANDO /ping ===
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Responde se o bot está ativo"""
     await update.message.reply_text("Pong! Bot ativo ✅")
 
-# === MAIN ===
-async def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("detalhes", detalhes))
-    app.add_handler(CommandHandler("status", status))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("ping", ping))
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando de início"""
+    msg = (
+        "🤖 *Bem-vindo ao DAAS PortWatch Bot!*\n\n"
+        "Este bot monitora manobras de navios automaticamente.\n\n"
+        "Use /help para ver todos os comandos disponíveis."
+    )
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
-    async def loop_monitoramento():
-        while True:
+# === TAREFA EM SEGUNDO PLANO ===
+async def background_monitor(app):
+    """Tarefa de monitoramento em segundo plano"""
+    while True:
+        try:
             await verificar_novidades(app)
             await asyncio.sleep(600)  # 10 minutos
+        except Exception as e:
+            print(f"❌ Erro no monitoramento em background: {e}")
+            await asyncio.sleep(60)  # Espera 1 minuto antes de tentar novamente
 
-    asyncio.create_task(loop_monitoramento())
-
-    print("🤖 Bot DAAS PortWatch iniciado!")
-    await app.run_polling()
-
+# === MAIN ===
+async def main():
+    """Função principal corrigida para Railway"""
+    try:
+        print("🚀 Iniciando DAAS PortWatch Bot...")
+        
+        # Cria a aplicação
+        app = ApplicationBuilder().token(TOKEN).build()
+        
+        # Adiciona handlers
+        app.add_handler(CommandHandler("start", start))
+        app.add_handler(CommandHandler("help", help_command))
+        app.add_handler(CommandHandler("detalhes", detalhes))
+        app.add_handler(CommandHandler("status", status))
+        app.add_handler(CommandHandler("ping", ping))
+        
+        # Inicia a tarefa de monitoramento em background
+        asyncio.create_task(background_monitor(app))
+        
+        print("✅ Bot inicializado com sucesso!")
+        print("📡 Iniciando polling...")
+        
+        # Inicia o bot
+        await app.run_polling()
+        
+    except Exception as e:
+        print(f"❌ Erro fatal na inicialização: {e}")
+        raise
 
 if __name__ == "__main__":
-    import nest_asyncio
-    nest_asyncio.apply()
-    import asyncio
-    # asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("👋 Bot interrompido pelo usuário")
+    except Exception as e:
+        print(f"💥 Erro crítico: {e}")
