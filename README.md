@@ -11,6 +11,7 @@ O **DAAS PortWatch** é um bot do Telegram que monitora manobras de navios no po
 - Comando `/detalhes` para ver informações completas de um navio específico.
 - Comando `/ping` para testar se o bot está online.
 - Comando `/status` para conferir o status atual e os navios previstos.
+- Comando `/verificar` para verificar manualmente por novas manobras
 
 ---
 
@@ -21,6 +22,7 @@ O **DAAS PortWatch** é um bot do Telegram que monitora manobras de navios no po
 | `/detalhes`   | Retorna detalhes completos de um navio           |
 | `/ping`       | Retorna "pong" para testar se o bot está ativo   |
 | `/status`     | Mostra a última checagem e navios previstos      |
+| `/verificar`  | Verifica manualmente por novas manobras          |
 
 ---
 
