@@ -284,8 +284,13 @@ def main():
     try:
         print("🚀 Iniciando DAAS PortWatch Bot...")
         
-        # Cria a aplicação
-        application = ApplicationBuilder().token(TOKEN).build()
+        # Cria a aplicação com polling parameters específicos
+        application = (
+            ApplicationBuilder()
+            .token(TOKEN)
+            .concurrent_updates(True)
+            .build()
+        )
         
         # Adiciona handlers
         application.add_handler(CommandHandler("start", start))
@@ -298,12 +303,16 @@ def main():
         print("✅ Bot inicializado com sucesso!")
         print("📡 Iniciando polling...")
         
-        # Inicia o bot
-        application.run_polling()
+        # Inicia o bot com polling parameters
+        application.run_polling(
+            allowed_updates=Update.ALL_TYPES,
+            drop_pending_updates=True,  # Importante: descarta updates pendentes
+            close_loop=False
+        )
         
     except Exception as e:
         print(f"❌ Erro fatal na inicialização: {e}")
         raise
-
+    
 if __name__ == "__main__":
     main()
